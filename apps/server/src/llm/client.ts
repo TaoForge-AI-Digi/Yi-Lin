@@ -1,0 +1,110 @@
+export interface LLMMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+  tool_calls?: ToolCall[]
+}
+
+export interface ToolCall {
+  id: string
+  type: 'function'
+  function: { name: string; arguments: string }
+}
+
+export interface LLMChunk {
+  type: 'delta' | 'done' | 'error'
+  text?: string
+  finish_reason?: string
+  usage?: { input_tokens: number; output_tokens: number }
+  tool_calls?: ToolCall[]
+}
+
+export interface LLMOptions {
+  baseUrl: string
+  apiKey: string
+  model: string
+  messages: LLMMessage[]
+  tools?: Array<{
+    type: 'function'
+    function: {
+      name: string
+      description: string
+      parameters: Record<string, unknown>
+    }
+  }>
+  signal?: AbortSignal
+  onChunk?: (chunk: LLMChunk) => void
+}
+
+export async function* streamChatCompletion(opts: LLMOptions): AsyncGenerator<LLMChunk> {
+  const { baseUrl, apiKey, model, messages, tools, signal } = opts
+  const url = `${baseUrl.replace(/\/+$/, '')}/chat/completions`
+  const body: Record<string, unknown> = {
+    model, messages, stream: true, stream_options: { include_usage: true },
+  }
+  if (tools && tools.length > 0) body.tools = tools
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {}),
+    },
+    body: JSON.stringify(body),
+    signal,
+  })
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    yield { type: 'error', text: `LLM API ${res.status}: ${text}` }
+    return
+  }
+
+  const reader = res.body?.getReader()
+  if (!reader) { yield { type: 'error', text: 'No response body' }; return }
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() || ''
+
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed || !trimmed.startsWith('data: ')) continue
+      const data = trimmed.slice(6)
+      if (data === '[DONE]') { yield { type: 'done' }; return }
+
+      try {
+        const parsed = JSON.parse(data)
+        const delta = parsed.choices?.[0]?.delta || {}
+        const finish = parsed.choices?.[0]?.finish_reason
+
+        if (delta.content) {
+          yield { type: 'delta', text: delta.content }
+        }
+        if (delta.tool_calls) {
+          yield { type: 'delta', tool_calls: delta.tool_calls.map((tc: any) => ({
+            id: tc.id || '',
+            type: 'function' as const,
+            function: { name: tc.function?.name || '', arguments: tc.function?.arguments || '' },
+          }))}
+        }
+        if (finish) {
+          yield {
+            type: 'done',
+            finish_reason: finish,
+            usage: parsed.usage ? {
+              input_tokens: parsed.usage.prompt_tokens || parsed.usage.input_tokens || 0,
+              output_tokens: parsed.usage.completion_tokens || parsed.usage.output_tokens || 0,
+            } : undefined,
+          }
+          return
+        }
+      } catch { /* skip malformed SSE lines */ }
+    }
+  }
+  yield { type: 'done' }
+}
