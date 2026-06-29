@@ -1,10 +1,17 @@
 <script setup lang="ts">
+defineProps<{
+  activeFilter: 'all' | 'pinned'
+}>()
+
+const emit = defineEmits<{
+  filter: [type: 'all' | 'pinned']
+}>()
 </script>
 
 <template>
   <div class="filter-bar">
-    <button class="filter-btn">过滤</button>
-    <button class="sort-btn">排序</button>
+    <button class="filter-btn" :class="{ active: activeFilter === 'all' }" @click="emit('filter', 'all')">全部</button>
+    <button class="filter-btn" :class="{ active: activeFilter === 'pinned' }" @click="emit('filter', 'pinned')">置顶</button>
   </div>
 </template>
 
@@ -15,12 +22,17 @@
   padding: 8px;
   border-bottom: 1px solid #e0e0e0;
 }
-.filter-btn, .sort-btn {
+.filter-btn {
   padding: 4px 8px;
   border: 1px solid #ccc;
   border-radius: 4px;
   background: white;
   cursor: pointer;
   font-size: 12px;
+}
+.filter-btn.active {
+  background: #007aff;
+  color: white;
+  border-color: #007aff;
 }
 </style>

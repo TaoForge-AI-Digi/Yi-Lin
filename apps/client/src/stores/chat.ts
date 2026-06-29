@@ -222,13 +222,22 @@ export const useChatStore = defineStore('chat', () => {
 
   async function batchDeleteSessions() {
     const ids = Array.from(selectedSessionIds.value)
-    await Promise.all(ids.map(id => sessionsApi.deleteSession(id)))
-    sessions.value = sessions.value.filter(s => !selectedSessionIds.value.has(s.id))
-    if (activeSessionId.value && selectedSessionIds.value.has(activeSessionId.value)) {
+    const failedIds: string[] = []
+    await Promise.all(ids.map(id =>
+      sessionsApi.deleteSession(id).catch(() => { failedIds.push(id) })
+    ))
+    if (failedIds.length > 0) {
+      console.warn(`Failed to delete ${failedIds.length} session(s):`, failedIds)
+    }
+    const deletedIds = ids.filter(id => !failedIds.includes(id))
+    sessions.value = sessions.value.filter(s => !deletedIds.includes(s.id))
+    if (activeSessionId.value && deletedIds.includes(activeSessionId.value)) {
       activeSessionId.value = null
     }
-    selectedSessionIds.value.clear()
-    isBatchMode.value = false
+    deletedIds.forEach(id => selectedSessionIds.value.delete(id))
+    if (selectedSessionIds.value.size === 0) {
+      isBatchMode.value = false
+    }
   }
 
   return {

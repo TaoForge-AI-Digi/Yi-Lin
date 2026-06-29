@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import ContextMenu from './ContextMenu.vue'
+import { useChatStore } from '@/stores/chat'
 
 const props = defineProps<{
   session: {
@@ -16,6 +17,7 @@ const emit = defineEmits<{
   contextmenu: [event: MouseEvent]
 }>()
 
+const chatStore = useChatStore()
 const showContextMenu = ref(false)
 const contextMenuPos = ref({ x: 0, y: 0 })
 
@@ -26,7 +28,17 @@ function handleContextMenu(event: MouseEvent) {
 }
 
 function handleContextAction(action: string) {
-  console.log('Action:', action, 'Session:', props.session.id)
+  switch (action) {
+    case 'delete':
+      chatStore.batchDeleteSessions()
+      break
+    case 'pin':
+      // TODO: implement pin toggle in store
+      break
+    case 'rename':
+      // TODO: implement rename
+      break
+  }
 }
 </script>
 
