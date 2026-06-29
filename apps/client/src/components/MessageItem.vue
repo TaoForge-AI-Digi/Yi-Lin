@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import CopyButton from './CopyButton.vue'
 import ToolDetail from './ToolDetail.vue'
+import ThinkingBlock from './ThinkingBlock.vue'
 
 defineProps<{ message: import('@/stores/chat').Message }>()
 </script>
@@ -8,6 +9,11 @@ defineProps<{ message: import('@/stores/chat').Message }>()
 <template>
   <div class="message" :class="message.role">
     <div class="bubble">
+      <ThinkingBlock
+        v-if="message.reasoning"
+        :content="message.reasoning"
+        :duration="message.reasoning_duration"
+      />
       <div v-if="message.role === 'tool'" class="tool-message">
         <ToolDetail
           :tool-name="message.tool_name || ''"

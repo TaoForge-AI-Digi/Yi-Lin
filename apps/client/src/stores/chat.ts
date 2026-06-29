@@ -10,6 +10,8 @@ export interface Message {
   tool_name?: string; tool_input?: string; tool_output?: string
   tool_status?: 'running' | 'done' | 'error'
   is_streaming?: boolean
+  reasoning?: string
+  reasoning_duration?: number
   timestamp: number
 }
 
