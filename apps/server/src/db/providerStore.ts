@@ -1,0 +1,31 @@
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
+import { resolve } from 'path'
+
+const DATA_DIR = resolve(import.meta.dirname, '../../data')
+const FILE = resolve(DATA_DIR, 'providers.json')
+mkdirSync(DATA_DIR, { recursive: true })
+
+export interface ProviderRecord {
+  id: string; name: string; base_url: string; api_key: string
+  models: Array<{ id: string; name: string }>
+}
+
+function readAll(): ProviderRecord[] {
+  if (!existsSync(FILE)) return []
+  return JSON.parse(readFileSync(FILE, 'utf-8'))
+}
+function writeAll(items: ProviderRecord[]) {
+  writeFileSync(FILE, JSON.stringify(items, null, 2), 'utf-8')
+}
+
+export const providerStore = {
+  getAll: () => readAll(),
+  getById: (id: string) => readAll().find(p => p.id === id) || null,
+  create: (data: ProviderRecord) => { const all = readAll(); all.push(data); writeAll(all); return data },
+  update: (id: string, patch: Partial<ProviderRecord>) => {
+    const all = readAll(); const idx = all.findIndex(p => p.id === id)
+    if (idx < 0) return null
+    all[idx] = { ...all[idx], ...patch, id }; writeAll(all); return all[idx]
+  },
+  delete: (id: string) => { const all = readAll(); const filtered = all.filter(p => p.id !== id); if (filtered.length === all.length) return false; writeAll(filtered); return true },
+}

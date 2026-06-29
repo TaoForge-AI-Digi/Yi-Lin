@@ -1,0 +1,46 @@
+[
+  {
+    "id": "general",
+    "name": "General",
+    "description": "通用助手",
+    "color": "#6366f1",
+    "permissions": {
+      "files": "allow",
+      "bash": "deny"
+    },
+    "builtIn": true
+  },
+  {
+    "id": "coder",
+    "name": "Coder",
+    "description": "编程专家",
+    "color": "#10b981",
+    "permissions": {
+      "files": "allow",
+      "bash": "ask"
+    },
+    "builtIn": true
+  },
+  {
+    "id": "reviewer",
+    "name": "Reviewer",
+    "description": "代码审查",
+    "color": "#f59e0b",
+    "permissions": {
+      "files": "deny",
+      "bash": "deny"
+    },
+    "builtIn": true
+  },
+  {
+    "id": "explorer",
+    "name": "Explorer",
+    "description": "代码探索",
+    "color": "#8b5cf6",
+    "permissions": {
+      "files": "allow",
+      "bash": "deny"
+    },
+    "builtIn": true
+  }
+]
