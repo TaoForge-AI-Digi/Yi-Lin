@@ -15,8 +15,14 @@ export interface Message {
 
 export interface Session {
   id: string; character_id: string; title: string; messages: Message[]
-  model?: string; provider_id?: string; workspace?: string
+  model?: string; provider_id?: string; workspace?: string; pinned?: boolean
   created_at: number; updated_at: number
+}
+
+export interface WorkspaceGroup {
+  name: string
+  sessions: Session[]
+  collapsed: boolean
 }
 
 export const useChatStore = defineStore('chat', () => {
@@ -25,6 +31,31 @@ export const useChatStore = defineStore('chat', () => {
   const activeSession = computed(() => sessions.value.find(s => s.id === activeSessionId.value) || null)
   const isStreaming = ref(false)
   const pendingApproval = ref<{ tool_call_id: string; tool_name: string; description: string } | null>(null)
+  const collapsedWorkspaces = ref<Set<string>>(new Set())
+
+  const workspaceGroups = computed<WorkspaceGroup[]>(() => {
+    const groups = new Map<string, Session[]>()
+    sessions.value.forEach(session => {
+      const workspace = session.workspace || 'default'
+      if (!groups.has(workspace)) {
+        groups.set(workspace, [])
+      }
+      groups.get(workspace)!.push(session)
+    })
+    return Array.from(groups.entries()).map(([name, sessions]) => ({
+      name,
+      sessions,
+      collapsed: collapsedWorkspaces.value.has(name),
+    }))
+  })
+
+  function toggleWorkspaceCollapse(workspace: string) {
+    if (collapsedWorkspaces.value.has(workspace)) {
+      collapsedWorkspaces.value.delete(workspace)
+    } else {
+      collapsedWorkspaces.value.add(workspace)
+    }
+  }
 
   async function loadSessions() {
     const list = await sessionsApi.fetchSessions()
@@ -162,6 +193,8 @@ export const useChatStore = defineStore('chat', () => {
 
   return {
     sessions, activeSessionId, activeSession, isStreaming, pendingApproval,
+    collapsedWorkspaces, workspaceGroups,
     loadSessions, createSession, switchSession, sendMessage, respondApproval, abortRun,
+    toggleWorkspaceCollapse,
   }
 })
