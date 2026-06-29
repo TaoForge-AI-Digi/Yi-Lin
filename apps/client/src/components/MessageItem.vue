@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import CopyButton from './CopyButton.vue'
+
 defineProps<{ message: import('@/stores/chat').Message }>()
 </script>
 
@@ -15,6 +17,9 @@ defineProps<{ message: import('@/stores/chat').Message }>()
         <span v-if="message.is_streaming && !message.content" class="cursor-blink">▋</span>
         <span style="white-space: pre-wrap">{{ message.content }}</span>
         <span v-if="message.is_streaming && message.content" class="cursor-blink">▋</span>
+      </div>
+      <div v-if="message.role !== 'tool' && !message.is_streaming" class="message-actions">
+        <CopyButton :text="message.content" />
       </div>
     </div>
   </div>
@@ -33,4 +38,5 @@ defineProps<{ message: import('@/stores/chat').Message }>()
 .tool-detail.output { background: #e8f5e9; }
 .cursor-blink { animation: blink 1s step-end infinite; }
 @keyframes blink { 50% { opacity: 0; } }
+.message-actions { margin-top: 8px; display: flex; gap: 8px; }
 </style>
