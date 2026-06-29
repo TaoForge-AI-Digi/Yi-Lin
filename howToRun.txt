@@ -1,0 +1,5 @@
+# Terminal 1 - Server
+cd apps/server; npx tsx src/index.ts
+
+# Terminal 2 - Client dev server
+cd apps/client; npx vite
