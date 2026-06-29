@@ -13,29 +13,58 @@ const md = new MarkdownIt({
   linkify: true,
 })
 
-const renderedHtml = computed(() => {
-  return md.render(props.content)
-})
+interface RenderSegment {
+  type: 'html' | 'code'
+  content: string
+  language?: string
+}
 
-const codeBlocks = computed(() => {
-  const blocks: Array<{ code: string; language?: string }> = []
-  const regex = /```(\w+)?\n([\s\S]*?)```/g
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+}
+
+const segments = computed<RenderSegment[]>(() => {
+  const html = md.render(props.content)
+  const result: RenderSegment[] = []
+  const codeBlockRegex = /<pre><code(?: class="language-(\w+)")?>([\s\S]*?)<\/code><\/pre>/g
+  let lastIndex = 0
   let match
-  
-  while ((match = regex.exec(props.content)) !== null) {
-    blocks.push({
-      language: match[1],
-      code: match[2].trim(),
+
+  while ((match = codeBlockRegex.exec(html)) !== null) {
+    if (match.index > lastIndex) {
+      result.push({ type: 'html', content: html.slice(lastIndex, match.index) })
+    }
+    result.push({
+      type: 'code',
+      content: decodeHtmlEntities(match[2]),
+      language: match[1] || undefined,
     })
+    lastIndex = match.index + match[0].length
   }
-  
-  return blocks
+
+  if (lastIndex < html.length) {
+    result.push({ type: 'html', content: html.slice(lastIndex) })
+  }
+
+  return result
 })
 </script>
 
 <template>
   <div class="markdown-renderer">
-    <div v-html="renderedHtml"></div>
+    <template v-for="(segment, index) in segments" :key="index">
+      <CodeBlock
+        v-if="segment.type === 'code'"
+        :code="segment.content"
+        :language="segment.language"
+      />
+      <div v-else v-html="segment.content"></div>
+    </template>
   </div>
 </template>
 
