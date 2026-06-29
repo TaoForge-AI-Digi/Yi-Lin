@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import CopyButton from './CopyButton.vue'
+import ToolDetail from './ToolDetail.vue'
 
 defineProps<{ message: import('@/stores/chat').Message }>()
 </script>
@@ -7,11 +8,13 @@ defineProps<{ message: import('@/stores/chat').Message }>()
 <template>
   <div class="message" :class="message.role">
     <div class="bubble">
-      <div v-if="message.role === 'tool'" class="tool-card">
-        <span class="tool-name">🛠 {{ message.tool_name }}</span>
-        <span v-if="message.tool_status === 'running'" class="badge running">running...</span>
-        <pre v-if="message.tool_input" class="tool-detail">{{ message.tool_input }}</pre>
-        <pre v-if="message.tool_output" class="tool-detail output">{{ message.tool_output }}</pre>
+      <div v-if="message.role === 'tool'" class="tool-message">
+        <ToolDetail
+          :tool-name="message.tool_name || ''"
+          :tool-input="message.tool_input"
+          :tool-output="message.tool_output"
+          :status="message.tool_status || 'running'"
+        />
       </div>
       <div v-else class="text-content">
         <span v-if="message.is_streaming && !message.content" class="cursor-blink">▋</span>
@@ -31,11 +34,7 @@ defineProps<{ message: import('@/stores/chat').Message }>()
 .message.assistant .bubble { background: #f0f0f0; }
 .message.user .bubble { background: #007aff; color: white; }
 .bubble { max-width: 80%; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.5; }
-.tool-card { font-size: 13px; }
-.tool-name { font-weight: 600; }
-.badge.running { color: #666; font-size: 12px; margin-left: 8px; }
-.tool-detail { background: #f5f5f5; padding: 8px; border-radius: 6px; margin-top: 6px; font-size: 12px; overflow-x: auto; }
-.tool-detail.output { background: #e8f5e9; }
+.tool-message { width: 100%; }
 .cursor-blink { animation: blink 1s step-end infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 .message-actions { margin-top: 8px; display: flex; gap: 8px; }
