@@ -1,5 +1,8 @@
 <script setup lang="ts">
-defineProps<{
+import { ref } from 'vue'
+import ContextMenu from './ContextMenu.vue'
+
+const props = defineProps<{
   session: {
     id: string
     title: string
@@ -12,6 +15,19 @@ const emit = defineEmits<{
   click: []
   contextmenu: [event: MouseEvent]
 }>()
+
+const showContextMenu = ref(false)
+const contextMenuPos = ref({ x: 0, y: 0 })
+
+function handleContextMenu(event: MouseEvent) {
+  contextMenuPos.value = { x: event.clientX, y: event.clientY }
+  showContextMenu.value = true
+  emit('contextmenu', event)
+}
+
+function handleContextAction(action: string) {
+  console.log('Action:', action, 'Session:', props.session.id)
+}
 </script>
 
 <template>
@@ -19,12 +35,21 @@ const emit = defineEmits<{
     class="session-item"
     :class="{ active }"
     @click="emit('click')"
-    @contextmenu.prevent="emit('contextmenu', $event)"
+    @contextmenu.prevent="handleContextMenu"
   >
     <span class="status-dot"></span>
     <span class="session-title">{{ session.title || '新建对话' }}</span>
     <span v-if="session.pinned" class="pin-icon">📌</span>
   </div>
+
+  <ContextMenu
+    :visible="showContextMenu"
+    :x="contextMenuPos.x"
+    :y="contextMenuPos.y"
+    :session-id="session.id"
+    @close="showContextMenu = false"
+    @action="handleContextAction"
+  />
 </template>
 
 <style scoped>
