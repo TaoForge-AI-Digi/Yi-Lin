@@ -1,10 +1,14 @@
 <script setup lang="ts">
+import SearchBar from './Sidebar/SearchBar.vue'
+import FilterBar from './Sidebar/FilterBar.vue'
 import SessionList from './SessionList.vue'
 import SettingsBtn from './SettingsBtn.vue'
 </script>
 
 <template>
   <aside class="sidebar">
+    <SearchBar />
+    <FilterBar />
     <SessionList />
     <SettingsBtn />
   </aside>
