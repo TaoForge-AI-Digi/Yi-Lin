@@ -11,14 +11,17 @@ import type { MessageRow } from '../db/messageStore.js'
 
 const MAX_TURNS = 20
 
-function rowToLLMMessage(row: MessageRow): LLMMessage {
+function rowToLLMMessage(row: MessageRow): LLMMessage | null {
   if (row.role === 'tool') {
-    return { role: 'tool', content: row.content || null, tool_call_id: row.tool_name || 'call_unknown' }
+    let callId = row.tool_name || ''
+    try { const p = JSON.parse(row.tool_input || '{}'); if (p.call_id) callId = p.call_id } catch {}
+    return { role: 'tool', content: row.content || '', tool_call_id: callId || 'call_unknown' }
   }
   if (row.role === 'assistant' && row.tool_input) {
     try { return { role: 'assistant', content: row.content || null, tool_calls: JSON.parse(row.tool_input) } } catch {}
   }
-  return { role: row.role as LLMMessage['role'], content: row.content || null }
+  if (row.role === 'assistant' && !row.content) return null
+  return { role: row.role as LLMMessage['role'], content: row.content || '' }
 }
 
 function deepCloneToolCall(tc: ToolCall): ToolCall {
@@ -59,7 +62,7 @@ export async function runAgent(io: Server, socket: Socket, sessionId: string, si
   const rows = messageStore.getMessages(sessionId)
   const messages: LLMMessage[] = []
   if (systemPrompt) messages.push({ role: 'system', content: systemPrompt })
-  for (const row of rows) messages.push(rowToLLMMessage(row))
+  for (const row of rows) { const m = rowToLLMMessage(row); if (m) messages.push(m) }
 
   const toolDefs = getToolDefinitions()
   const tools = toolDefs.length > 0 ? toolDefs : undefined
@@ -118,14 +121,16 @@ export async function runAgent(io: Server, socket: Socket, sessionId: string, si
     if (signal?.aborted) break
     if (errorText) break
 
-    messageStore.addMessage(sessionId, {
-      role: 'assistant', content: fullText,
-      tool_input: toolCallsAcc.length > 0 ? JSON.stringify(toolCallsAcc) : null,
-    })
-    messages.push({
-      role: 'assistant', content: fullText || null,
-      tool_calls: toolCallsAcc.length > 0 ? toolCallsAcc : undefined,
-    })
+    if (fullText || toolCallsAcc.length > 0) {
+      messageStore.addMessage(sessionId, {
+        role: 'assistant', content: fullText,
+        tool_input: toolCallsAcc.length > 0 ? JSON.stringify(toolCallsAcc) : null,
+      })
+      messages.push({
+        role: 'assistant', content: fullText || null,
+        tool_calls: toolCallsAcc.length > 0 ? toolCallsAcc : undefined,
+      })
+    }
 
     if (toolCallsAcc.length === 0) { done = true; break }
 
@@ -138,7 +143,7 @@ export async function runAgent(io: Server, socket: Socket, sessionId: string, si
 
       const permission = checkPermission(session.character_id, name)
       if (permission === 'deny') {
-        messageStore.addMessage(sessionId, { role: 'tool', content: JSON.stringify({ error: `${name} not permitted` }), tool_name: name, tool_input: argsStr, tool_output: '', tool_status: 'error' })
+        messageStore.addMessage(sessionId, { role: 'tool', content: JSON.stringify({ error: `${name} not permitted` }), tool_name: name, tool_input: JSON.stringify({ call_id: tc.id, args: argsStr }), tool_output: '', tool_status: 'error' })
         messages.push({ role: 'tool', content: JSON.stringify({ error: `${name} not permitted` }), tool_call_id: tc.id })
         socket.emit('tool.completed', { session_id: sessionId, tool_call_id: tc.id, tool_name: name, tool_output: 'Not permitted', duration_ms: 0 })
         continue
@@ -154,7 +159,7 @@ export async function runAgent(io: Server, socket: Socket, sessionId: string, si
           setTimeout(() => { socket.off('approval.respond', handler); resolve(false) }, 60000)
         })
         if (!approved) {
-          messageStore.addMessage(sessionId, { role: 'tool', content: JSON.stringify({ error: `${name} denied` }), tool_name: name, tool_input: argsStr, tool_output: '', tool_status: 'denied' })
+          messageStore.addMessage(sessionId, { role: 'tool', content: JSON.stringify({ error: `${name} denied` }), tool_name: name, tool_input: JSON.stringify({ call_id: tc.id, args: argsStr }), tool_output: '', tool_status: 'denied' })
           messages.push({ role: 'tool', content: JSON.stringify({ error: `${name} denied` }), tool_call_id: tc.id })
           socket.emit('tool.completed', { session_id: sessionId, tool_call_id: tc.id, tool_name: name, tool_output: 'Denied by user', duration_ms: 0 })
           continue
@@ -167,7 +172,7 @@ export async function runAgent(io: Server, socket: Socket, sessionId: string, si
 
       messageStore.addMessage(sessionId, {
         role: 'tool', content: JSON.stringify({ output: result.output, error: result.error }),
-        tool_name: name, tool_input: argsStr, tool_output: result.output,
+        tool_name: name, tool_input: JSON.stringify({ call_id: tc.id, args: argsStr }), tool_output: result.output,
         tool_status: result.error ? 'error' : result.escaped ? 'denied' : 'success',
       })
       messages.push({
