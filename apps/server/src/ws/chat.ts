@@ -1,0 +1,51 @@
+import { Server, Socket } from 'socket.io'
+import { sessionStore } from '../db/sessionStore.js'
+import { messageStore } from '../db/messageStore.js'
+import { runAgent } from '../agent/loop.js'
+
+const activeRuns = new Map<string, { abort: () => void }>()
+
+export function registerChatSocket(io: Server, socket: Socket) {
+  socket.on('chat-run', async (data: Record<string, unknown>, ack?: (resp: unknown) => void) => {
+    try {
+      const sessionId = data.session_id as string
+      if (!sessionId) { ack?.({ error: 'No session_id' }); return }
+
+      let session = sessionStore.getById(sessionId)
+      if (!session) {
+        session = sessionStore.create({
+          id: sessionId,
+          character_id: (data.character_id as string) || 'general',
+          title: (data.title as string) || '',
+          model: (data.model as string) || undefined,
+          provider_id: (data.provider_id as string) || undefined,
+          workspace: (data.workspace as string) || undefined,
+        })
+      }
+
+      const input = (data.input as string) || ''
+      if (input.trim()) {
+        messageStore.addMessage(sessionId, { role: 'user', content: input })
+      }
+
+      const abortController = new AbortController()
+      activeRuns.set(sessionId, { abort: () => abortController.abort() })
+      ack?.({ run_id: `run_${sessionId}_${Date.now()}`, status: 'started' })
+
+      await runAgent(io, socket, sessionId, abortController.signal)
+    } catch (err) {
+      console.error('chat-run error:', err)
+      socket.emit('run.failed', { session_id: data.session_id, error: String(err) })
+    } finally {
+      if (data.session_id) activeRuns.delete(data.session_id as string)
+    }
+  })
+
+  socket.on('abort', (data: { session_id?: string }) => {
+    const sid = data.session_id
+    if (sid && activeRuns.has(sid)) {
+      activeRuns.get(sid)!.abort()
+      activeRuns.delete(sid)
+    }
+  })
+}
