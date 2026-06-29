@@ -1,26 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useChatStore } from '@/stores/chat'
-import { useCharactersStore } from '@/stores/characters'
-import { useProvidersStore } from '@/stores/providers'
+import ModelSelector from './Chat/ModelSelector.vue'
+import CharacterSelector from './Chat/CharacterSelector.vue'
 
+const { t } = useI18n()
 const chatStore = useChatStore()
-const charactersStore = useCharactersStore()
-const providersStore = useProvidersStore()
 
 const session = computed(() => chatStore.activeSession)
-
-function onCharacterChange(e: Event) {
-  const id = (e.target as HTMLSelectElement).value
-  charactersStore.setActive(id)
-  if (session.value) session.value.character_id = id
-}
-function onModelChange(e: Event) {
-  if (session.value) session.value.model = (e.target as HTMLSelectElement).value
-}
-function onProviderChange(e: Event) {
-  if (session.value) session.value.provider_id = (e.target as HTMLSelectElement).value
-}
 function onWorkspaceChange(e: Event) {
   if (session.value) session.value.workspace = (e.target as HTMLSelectElement).value
 }
@@ -28,25 +16,14 @@ function onWorkspaceChange(e: Event) {
 
 <template>
   <div v-if="session" class="config-bar">
-    <label>Character
-      <select :value="session.character_id" @change="onCharacterChange">
-        <option v-for="c in charactersStore.characters" :key="c.id" :value="c.id">{{ c.name }}</option>
-      </select>
+    <label>{{ t('chat.character') }}
+      <CharacterSelector />
     </label>
-    <label>Model
-      <select :value="session.model || ''" @change="onModelChange">
-        <option value="">Default</option>
-        <option v-for="p in providersStore.providers" :key="p.id" :value="p.models[0]?.id">{{ p.models[0]?.name || p.models[0]?.id }}</option>
-      </select>
+    <label>{{ t('chat.model') }}
+      <ModelSelector />
     </label>
-    <label>Provider
-      <select :value="session.provider_id || ''" @change="onProviderChange">
-        <option value="">Default</option>
-        <option v-for="p in providersStore.providers" :key="p.id" :value="p.id">{{ p.name }}</option>
-      </select>
-    </label>
-    <label>Workspace
-      <input type="text" :value="session.workspace || ''" @change="onWorkspaceChange" placeholder="/path/to/project" />
+    <label>{{ t('chat.workspace') }}
+      <input type="text" :value="session.workspace || ''" @change="onWorkspaceChange" :placeholder="`/${t('chat.workspace').toLowerCase()}/project`" />
     </label>
   </div>
 </template>

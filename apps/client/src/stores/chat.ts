@@ -1,7 +1,22 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { connectSocket, getSocket, type RunEvent } from '@/api/socket'
 import * as sessionsApi from '@/api/sessions'
+
+const PERSIST_KEY = 'yi-lin-chat-defaults'
+
+function loadPersistedDefaults() {
+  try {
+    const raw = localStorage.getItem(PERSIST_KEY)
+    if (!raw) return {}
+    return JSON.parse(raw) as Record<string, string>
+  } catch { return {} }
+}
+
+function savePersistedDefaults(data: Record<string, string | undefined>) {
+  const existing = loadPersistedDefaults()
+  localStorage.setItem(PERSIST_KEY, JSON.stringify({ ...existing, ...data }))
+}
 
 function uid(): string { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8) }
 
@@ -87,10 +102,26 @@ export const useChatStore = defineStore('chat', () => {
     sessions.value = list.map(s => ({ ...s, model: s.model ?? undefined, provider_id: s.provider_id ?? undefined, workspace: s.workspace ?? undefined, messages: [] }))
   }
 
+  watch(activeSession, (s) => {
+    if (!s) return
+    savePersistedDefaults({
+      character_id: s.character_id,
+      provider_id: s.provider_id,
+      model: s.model,
+      workspace: s.workspace,
+    })
+  }, { deep: true })
+
+  watch(activeSessionId, (id) => {
+    if (id) savePersistedDefaults({ activeSessionId: id })
+  })
+
   async function createSession(opts: { character_id?: string; model?: string; provider_id?: string; workspace?: string } = {}): Promise<Session> {
+    const defs = loadPersistedDefaults()
     const session: Session = {
-      id: uid(), character_id: opts.character_id || 'general', title: '',
-      model: opts.model, provider_id: opts.provider_id, workspace: opts.workspace,
+      id: uid(), character_id: opts.character_id || defs.character_id || 'general', title: '',
+      model: opts.model || defs.model, provider_id: opts.provider_id || defs.provider_id,
+      workspace: opts.workspace || defs.workspace,
       messages: [], created_at: Date.now(), updated_at: Date.now(),
     }
     sessions.value.unshift(session)

@@ -1,9 +1,44 @@
-import { apiGet } from './client'
+import { apiGet, apiPost, apiPut, apiDelete } from './client'
 
-export interface Character {
-  id: string; name: string; description?: string; color?: string
-  permissions: { files: string; bash: string }
-  builtIn?: boolean
+export interface CharacterPermission {
+  edit?: 'ask' | 'allow' | 'deny'
+  bash?: 'ask' | 'allow' | 'deny'
+  webfetch?: 'allow' | 'deny'
 }
 
+export interface CharacterMemory {
+  enabled: boolean
+  selfEvolution?: boolean
+  charLimit?: number
+  maxEntries?: number
+}
+
+export interface Character {
+  id: string
+  name: string
+  description?: string
+  avatar?: string
+  color?: string
+  soul?: string
+  userProfile?: string
+  memory?: CharacterMemory
+  memoryContent?: string
+  model?: string
+  provider?: string
+  tools?: Record<string, boolean>
+  permissions?: CharacterPermission
+  maxSteps?: number
+  mode?: 'primary' | 'subagent' | 'all'
+  enabled?: boolean
+  builtIn?: boolean
+  createdAt?: number
+  updatedAt?: number
+}
+
+export type CharacterConfig = Omit<Character, 'id' | 'builtIn' | 'createdAt' | 'updatedAt'>
+
 export const fetchCharacters = () => apiGet<Character[]>('/api/characters')
+export const fetchCharacter = (id: string) => apiGet<Character>(`/api/characters/${id}`)
+export const createCharacter = (data: CharacterConfig) => apiPost<Character>('/api/characters', data)
+export const updateCharacter = (id: string, data: Partial<CharacterConfig>) => apiPut<Character>(`/api/characters/${id}`, data)
+export const deleteCharacter = (id: string) => apiDelete(`/api/characters/${id}`)

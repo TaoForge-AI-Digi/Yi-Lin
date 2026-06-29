@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import SettingsModal from './SettingsModal.vue'
+import SettingsView from './settings/SettingsView.vue'
 
 const showSettings = ref(false)
 </script>
@@ -8,7 +8,7 @@ const showSettings = ref(false)
 <template>
   <div class="settings-btn-area">
     <button class="settings-btn" @click="showSettings = true">⚙️ Settings</button>
-    <SettingsModal v-if="showSettings" @close="showSettings = false" />
+    <SettingsView v-if="showSettings" @close="showSettings = false" />
   </div>
 </template>
 

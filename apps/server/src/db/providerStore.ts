@@ -18,10 +18,20 @@ function writeAll(items: ProviderRecord[]) {
   writeFileSync(FILE, JSON.stringify(items, null, 2), 'utf-8')
 }
 
+// migrate existing records that lack an id
+function ensureIds() {
+  if (!existsSync(FILE)) return
+  const all = readAll()
+  let changed = false
+  all.forEach(p => { if (!p.id) { p.id = crypto.randomUUID(); changed = true } })
+  if (changed) writeAll(all)
+}
+ensureIds()
+
 export const providerStore = {
   getAll: () => readAll(),
   getById: (id: string) => readAll().find(p => p.id === id) || null,
-  create: (data: ProviderRecord) => { const all = readAll(); all.push(data); writeAll(all); return data },
+  create: (data: ProviderRecord) => { const all = readAll(); const record = { ...data, id: data.id || crypto.randomUUID() }; all.push(record); writeAll(all); return record },
   update: (id: string, patch: Partial<ProviderRecord>) => {
     const all = readAll(); const idx = all.findIndex(p => p.id === id)
     if (idx < 0) return null

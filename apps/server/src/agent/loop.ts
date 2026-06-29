@@ -44,8 +44,10 @@ function deepCloneToolCall(tc: ToolCall): ToolCall {
 function checkPermission(characterId: string, toolName: string): 'allow' | 'ask' | 'deny' {
   const character = characterMetaStore.getById(characterId)
   if (!character) return 'allow'
-  const category = toolName === 'bash' ? 'bash' : 'files'
-  return character.permissions[category]
+  const p = character.permissions
+  if (!p) return 'allow'
+  const category = toolName === 'bash' ? 'bash' : toolName === 'webfetch' ? 'webfetch' : 'edit'
+  return (p as any)[category] || 'allow'
 }
 
 export async function runAgent(io: Server, socket: Socket, sessionId: string, signal?: AbortSignal, opts: { thinking?: boolean; reasoning_effort?: string } = {}) {
@@ -71,6 +73,9 @@ export async function runAgent(io: Server, socket: Socket, sessionId: string, si
   if (charContent.user) systemParts.push(`## User Info\n${charContent.user}`)
   if (charContent.memory) systemParts.push(`## Memory\n${charContent.memory}`)
   const systemPrompt = systemParts.join('\n\n')
+
+  console.log(`[runAgent] sessionId=${sessionId} character_id=${session.character_id} systemParts.length=${systemParts.length} systemPrompt.length=${(systemPrompt || '').length}`)
+  if (systemParts.length > 0) console.log(`[runAgent] systemPrompt preview:\n${systemPrompt.slice(0, 300)}...`)
 
   const rows = messageStore.getMessages(sessionId)
   const messages: LLMMessage[] = []

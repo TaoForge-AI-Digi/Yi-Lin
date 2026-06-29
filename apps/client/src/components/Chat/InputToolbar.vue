@@ -1,29 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useChatStore } from '@/stores/chat'
-import { useCharactersStore } from '@/stores/characters'
-import { useProvidersStore } from '@/stores/providers'
+import ModelSelector from './ModelSelector.vue'
+import CharacterSelector from './CharacterSelector.vue'
 
+const { t } = useI18n()
 const chatStore = useChatStore()
-const charactersStore = useCharactersStore()
-const providersStore = useProvidersStore()
 
 const session = computed(() => chatStore.activeSession)
-
-function onCharacterChange(e: Event) {
-  const id = (e.target as HTMLSelectElement).value
-  charactersStore.setActive(id)
-  const s = session.value
-  if (s) s.character_id = id
-}
-function onModelChange(e: Event) {
-  const s = session.value
-  if (s) s.model = (e.target as HTMLSelectElement).value
-}
-function onProviderChange(e: Event) {
-  const s = session.value
-  if (s) s.provider_id = (e.target as HTMLSelectElement).value
-}
 function onWorkspaceChange(e: Event) {
   const s = session.value
   if (s) s.workspace = (e.target as HTMLSelectElement).value
@@ -44,39 +29,21 @@ function onReasoningEffortChange(e: Event) {
 <template>
   <div v-if="session" class="input-toolbar">
     <div class="toolbar-left">
-      <label class="toolbar-item">
-        <span class="label">角色</span>
-        <select :value="session.character_id" @change="onCharacterChange">
-          <option v-for="c in charactersStore.characters" :key="c.id" :value="c.id">{{ c.name }}</option>
-        </select>
-      </label>
-      <label class="toolbar-item">
-        <span class="label">模型</span>
-        <select :value="session.model || ''" @change="onModelChange">
-          <option value="">Default</option>
-          <option v-for="p in providersStore.providers" :key="p.id" :value="p.models[0]?.id">{{ p.models[0]?.name || p.models[0]?.id }}</option>
-        </select>
-      </label>
-      <label class="toolbar-item">
-        <span class="label">Provider</span>
-        <select :value="session.provider_id || ''" @change="onProviderChange">
-          <option value="">Default</option>
-          <option v-for="p in providersStore.providers" :key="p.id" :value="p.id">{{ p.name }}</option>
-        </select>
-      </label>
+      <CharacterSelector />
+      <ModelSelector />
       <label class="toolbar-item workspace">
-        <span class="label">目录</span>
-        <input type="text" :value="session.workspace || ''" @change="onWorkspaceChange" placeholder="/path/to/project" />
+        <span class="label">{{ t('chat.workspace') }}</span>
+        <input type="text" :value="session.workspace || ''" @change="onWorkspaceChange" :placeholder="`/${t('chat.workspace').toLowerCase()}/project`" />
       </label>
     </div>
     <div class="toolbar-right">
       <button class="thinking-toggle" :class="{ active: session.thinking }" @click="toggleThinking">
-        🧠 深度思考
+        🧠 {{ t('chat.thinking') }}
       </button>
       <label v-if="session.thinking" class="toolbar-item">
-        <span class="label">推理强度</span>
+        <span class="label">{{ t('chat.reasoningEffort') }}</span>
         <select :value="session.reasoning_effort || ''" @change="onReasoningEffortChange">
-          <option value="">默认</option>
+          <option value="">{{ t('chat.default') }}</option>
           <option value="low">低</option>
           <option value="medium">中</option>
           <option value="high">高</option>

@@ -16,10 +16,22 @@ onMounted(async () => {
     charactersStore.load(),
     chatStore.loadSessions(),
   ])
-  if (chatStore.sessions.length === 0) {
-    chatStore.createSession()
+  let targetId: string | null = null
+  try {
+    const saved = JSON.parse(localStorage.getItem('yi-lin-chat-defaults') || '{}')
+    if (saved.activeSessionId && chatStore.sessions.find(s => s.id === saved.activeSessionId)) {
+      targetId = saved.activeSessionId
+    }
+  } catch {}
+  if (!targetId) {
+    if (chatStore.sessions.length === 0) {
+      const s = await chatStore.createSession()
+      targetId = s.id
+    } else {
+      targetId = chatStore.sessions[0].id
+    }
   }
-  chatStore.switchSession(chatStore.sessions[0].id)
+  await chatStore.switchSession(targetId)
 })
 </script>
 

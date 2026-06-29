@@ -4,6 +4,7 @@ import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 import { Server } from 'socket.io'
 import { seedBuiltinCharacters } from './db/characterStore.js'
+import { seedBuiltinCharacterContent } from './character/store.js'
 import { registerChatSocket } from './ws/chat.js'
 import providersRouter from './routes/providers.js'
 import sessionsRouter from './routes/sessions.js'
@@ -14,6 +15,7 @@ process.on('uncaughtException', (err) => { console.error('[FATAL]', err) })
 process.on('unhandledRejection', (err) => { console.error('[FATAL]', err) })
 
 seedBuiltinCharacters()
+seedBuiltinCharacterContent()
 getDb()
 
 const app = new Hono()
