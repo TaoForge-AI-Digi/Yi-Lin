@@ -28,7 +28,8 @@
     "edit": "编辑",
     "delete": "删除",
     "cancel": "取消",
-    "save": "保存"
+    "save": "保存",
+    "loading": "加载中..."
   },
   "provider": {
     "title": "提供商设置",
@@ -135,6 +136,55 @@
     "display": "显示",
     "role": "角色",
     "session": "会话",
-    "about": "关于"
+    "about": "关于",
+    "tool": "工具",
+    "skill": "技能"
+  },
+  "skillSetting": {
+    "title": "技能管理",
+    "source": {
+      "builtin": "内建",
+      "hub": "中心",
+      "local": "本地",
+      "external": "外部"
+    },
+    "modified": "已修改",
+    "searchPlaceholder": "搜索技能...",
+    "tagPlaceholder": "标签筛选",
+    "import": "导入技能",
+    "noSkills": "暂无匹配的技能",
+    "selectHint": "选择一个技能查看详情",
+    "back": "返回"
+  },
+  "toolSetting": {
+    "title": "工具 / MCP",
+    "builtinSection": "内置工具",
+    "builtinDesc": "AI 助手可调用的内置工具，可禁用不需要的工具。",
+    "mcpSection": "MCP 服务器",
+    "mcpDesc": "配置 MCP 服务器以添加自定义工具，每台服务器可提供多个工具。",
+    "addMCP": "添加 MCP 服务器",
+    "editMCPSection": "编辑 MCP 服务器",
+    "newMCPSection": "新建 MCP 服务器",
+    "nameLabel": "名称",
+    "namePlaceholder": "例如: 文件系统",
+    "commandLabel": "命令",
+    "commandPlaceholder": "例如: npx",
+    "argsLabel": "参数",
+    "argsPlaceholder": "例如: -y @modelcontextprotocol/server-filesystem /path",
+    "envLabel": "环境变量（每行 KEY=VALUE）",
+    "envPlaceholder": "API_KEY=xxx\nBASE_URL=http://...",
+    "edit": "编辑",
+    "delete": "删除",
+    "deleteConfirm": "确定删除此 MCP 服务器？",
+    "save": "保存",
+    "cancel": "取消",
+    "importBtn": "导入",
+    "importTitle": "导入工具配置",
+    "importDesc": "粘贴 JSON 格式的 MCP 服务器配置：",
+    "importPlaceholder": "{\n  \"name\": \"文件系统\",\n  \"command\": \"npx\",\n  \"args\": [\"-y\", \"@modelcontextprotocol/server-filesystem\", \"/tmp\"],\n  \"env\": {\"API_KEY\": \"xxx\"}\n}",
+    "importConfirm": "导入",
+    "importInvalidJson": "JSON 格式无效",
+    "importMissingCommand": "配置中缺少 command 字段",
+    "noMCP": "暂无 MCP 服务器，点击「新增」或「导入」添加"
   }
 }

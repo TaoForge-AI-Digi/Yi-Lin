@@ -5,6 +5,8 @@ import ProviderSettings from './ProviderSettings.vue'
 import DisplaySettings from './DisplaySettings.vue'
 import RoleSettings from './RoleSettings.vue'
 import SessionSettings from './SessionSettings.vue'
+import ToolSettings from './ToolSettings.vue'
+import SkillSettings from './SkillSettings.vue'
 
 defineEmits<{ close: [] }>()
 const { t } = useI18n()
@@ -14,10 +16,12 @@ const tabs = [
   { key: 'display', labelKey: 'settingsNav.display' },
   { key: 'role', labelKey: 'settingsNav.role' },
   { key: 'session', labelKey: 'settingsNav.session' },
+  { key: 'tool', labelKey: 'settingsNav.tool' },
+  { key: 'skill', labelKey: 'settingsNav.skill' },
   { key: 'about', labelKey: 'settingsNav.about' },
 ]
 
-const activeTab = ref('provider')
+const activeTab = ref('tool')
 </script>
 
 <template>
@@ -45,6 +49,8 @@ const activeTab = ref('provider')
       <DisplaySettings v-if="activeTab === 'display'" />
       <RoleSettings v-if="activeTab === 'role'" />
       <SessionSettings v-if="activeTab === 'session'" />
+      <ToolSettings v-if="activeTab === 'tool'" />
+      <SkillSettings v-if="activeTab === 'skill'" />
       <section v-if="activeTab === 'about'" class="settings-section">
         <h3 class="section-title">{{ t('settingsNav.about') }}</h3>
         <div class="about-info">

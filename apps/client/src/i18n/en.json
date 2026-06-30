@@ -28,7 +28,8 @@
     "edit": "Edit",
     "delete": "Delete",
     "cancel": "Cancel",
-    "save": "Save"
+    "save": "Save",
+    "loading": "Loading..."
   },
   "provider": {
     "title": "Provider Settings",
@@ -135,6 +136,55 @@
     "display": "Display",
     "role": "Role",
     "session": "Session",
-    "about": "About"
+    "about": "About",
+    "tool": "Tools",
+    "skill": "Skills"
+  },
+  "skillSetting": {
+    "title": "Skills",
+    "source": {
+      "builtin": "Built-in",
+      "hub": "Hub",
+      "local": "Local",
+      "external": "External"
+    },
+    "modified": "Modified",
+    "searchPlaceholder": "Search skills...",
+    "tagPlaceholder": "Tag filter",
+    "import": "Import Skill",
+    "noSkills": "No matching skills",
+    "selectHint": "Select a skill to view details",
+    "back": "Back"
+  },
+  "toolSetting": {
+    "title": "Tools / MCP",
+    "builtinSection": "Built-in Tools",
+    "builtinDesc": "Built-in tools available to the AI assistant. Disable ones you don't need.",
+    "mcpSection": "MCP Servers",
+    "mcpDesc": "Configure MCP servers to add custom tools. Each server can provide multiple tools.",
+    "addMCP": "Add MCP Server",
+    "editMCPSection": "Edit MCP Server",
+    "newMCPSection": "New MCP Server",
+    "nameLabel": "Name",
+    "namePlaceholder": "e.g. Filesystem",
+    "commandLabel": "Command",
+    "commandPlaceholder": "e.g. npx",
+    "argsLabel": "Arguments",
+    "argsPlaceholder": "e.g. -y @modelcontextprotocol/server-filesystem /path",
+    "envLabel": "Environment Variables (one KEY=VALUE per line)",
+    "envPlaceholder": "API_KEY=xxx\nBASE_URL=http://...",
+    "edit": "Edit",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this MCP server?",
+    "save": "Save",
+    "cancel": "Cancel",
+    "importBtn": "Import",
+    "importTitle": "Import Tool Config",
+    "importDesc": "Paste MCP server JSON configuration:",
+    "importPlaceholder": "{\n  \"name\": \"Filesystem\",\n  \"command\": \"npx\",\n  \"args\": [\"-y\", \"@modelcontextprotocol/server-filesystem\", \"/tmp\"],\n  \"env\": {\"API_KEY\": \"xxx\"}\n}",
+    "importConfirm": "Import",
+    "importInvalidJson": "Invalid JSON",
+    "importMissingCommand": "Missing command field",
+    "noMCP": "No MCP servers. Click 'New' or 'Import' to add one."
   }
 }

@@ -9,6 +9,8 @@ import { registerChatSocket } from './ws/chat.js'
 import providersRouter from './routes/providers.js'
 import sessionsRouter from './routes/sessions.js'
 import charactersRouter from './routes/characters.js'
+import skillsRouter from './routes/skills.js'
+import toolsRouter from './routes/tools.js'
 import { getDb } from './db/schema.js'
 
 process.on('uncaughtException', (err) => { console.error('[FATAL]', err) })
@@ -24,6 +26,8 @@ app.use('*', logger())
 app.route('/api/providers', providersRouter)
 app.route('/api/sessions', sessionsRouter)
 app.route('/api/characters', charactersRouter)
+app.route('/api/skills', skillsRouter)
+app.route('/api/tools', toolsRouter)
 app.get('/health', (c) => c.json({ ok: true }))
 
 const port = Number(process.env.PORT) || 3001
