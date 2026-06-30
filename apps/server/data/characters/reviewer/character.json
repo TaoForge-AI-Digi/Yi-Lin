@@ -1,0 +1,29 @@
+{
+  "id": "reviewer",
+  "name": "Reviewer",
+  "description": "代码审查",
+  "color": "#f59e0b",
+  "permissions": {
+    "files": "deny",
+    "bash": "deny"
+  },
+  "role": "sub",
+  "groups": [],
+  "default_strategy": "Ask",
+  "skills": [],
+  "builtIn": true,
+  "avatar": "",
+  "memory": {
+    "enabled": false,
+    "selfEvolution": false,
+    "charLimit": 2200
+  },
+  "maxSteps": 10,
+  "enabled": true,
+  "updatedAt": 1782805339679,
+  "tools": [
+    "read",
+    "grep",
+    "glob"
+  ]
+}

@@ -124,6 +124,12 @@
     "selfEvolution": "自我进化",
     "charLimit": "字数限制",
     "memoryContent": "记忆内容",
+    "roleField": "角色类型",
+    "roleMain": "主要",
+    "roleSub": "辅助",
+    "roleBoth": "两者",
+    "defaultStrategy": "默认策略",
+    "groups": "分组",
     "skillsPlaceholder": "技能配置即将推出...",
     "knowledgePlaceholder": "知识库配置即将推出..."
   },

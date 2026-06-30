@@ -4,8 +4,10 @@ import { characterMetaStore } from '../db/characterStore.js'
 import { providerStore } from '../db/providerStore.js'
 import { characterContentStore } from '../character/store.js'
 import { streamChatCompletion, type LLMMessage, type ToolCall } from '../llm/client.js'
-import { getToolDefinitions } from '../tools/definitions.js'
+import { DANGEROUS_TOOLS, getToolDefinitions } from '../tools/definitions.js'
 import { executeTool } from '../tools/executor.js'
+import { getSessionState, isToolApprovedForSession, approveToolForSession } from './session.js'
+import type { Strategy } from './session.js'
 import type { Server, Socket } from 'socket.io'
 import type { MessageRow } from '../db/messageStore.js'
 
@@ -41,13 +43,20 @@ function deepCloneToolCall(tc: ToolCall): ToolCall {
   return { id: tc.id, index: tc.index, type: 'function', function: { name: tc.function.name, arguments: tc.function.arguments } }
 }
 
-function checkPermission(characterId: string, toolName: string): 'allow' | 'ask' | 'deny' {
+function checkToolWhitelist(characterId: string, toolName: string): string | null {
   const character = characterMetaStore.getById(characterId)
-  if (!character) return 'allow'
-  const p = character.permissions
-  if (!p) return 'allow'
-  const category = toolName === 'bash' ? 'bash' : (toolName === 'webfetch' || toolName === 'websearch') ? 'webfetch' : 'edit'
-  return (p as any)[category] || 'allow'
+  if (!character) return null
+  const whitelist = character.tools
+  if (!whitelist || whitelist.length === 0) return `No tools are enabled for this character`
+  if (!whitelist.includes(toolName)) return `Tool "${toolName}" is not enabled for this character`
+  return null
+}
+
+function checkStrategy(toolName: string, strategy: Strategy): 'allow' | 'ask' | 'deny' {
+  const dangerous = DANGEROUS_TOOLS.includes(toolName)
+  if (strategy === 'Plan' && dangerous) return 'deny'
+  if (strategy === 'Ask' && dangerous) return 'ask'
+  return 'allow'
 }
 
 export async function runAgent(io: Server, socket: Socket, sessionId: string, signal?: AbortSignal, opts: { thinking?: boolean; reasoning_effort?: string } = {}) {
@@ -171,28 +180,47 @@ export async function runAgent(io: Server, socket: Socket, sessionId: string, si
       let args: Record<string, string> = {}
       try { args = JSON.parse(argsStr) } catch { args = {} }
 
-      const permission = checkPermission(session.character_id, name)
-      if (permission === 'deny') {
-        messageStore.addMessage(sessionId, { role: 'tool', content: JSON.stringify({ error: `${name} not permitted` }), tool_name: name, tool_input: JSON.stringify({ call_id: tc.id, args: argsStr }), tool_output: '', tool_status: 'error' })
-        messages.push({ role: 'tool', content: JSON.stringify({ error: `${name} not permitted` }), tool_call_id: tc.id })
-        socket.emit('tool.completed', { session_id: sessionId, tool_call_id: tc.id, tool_name: name, tool_output: 'Not permitted', duration_ms: 0 })
+      // L1: tool whitelist check
+      const bindingError = checkToolWhitelist(session.character_id, name)
+      if (bindingError) {
+        messageStore.addMessage(sessionId, { role: 'tool', content: JSON.stringify({ error: bindingError }), tool_name: name, tool_input: JSON.stringify({ call_id: tc.id, args: argsStr }), tool_output: '', tool_status: 'error' })
+        messages.push({ role: 'tool', content: JSON.stringify({ error: bindingError }), tool_call_id: tc.id })
+        socket.emit('tool.completed', { session_id: sessionId, tool_call_id: tc.id, tool_name: name, tool_output: bindingError, duration_ms: 0 })
         continue
       }
 
-      if (permission === 'ask') {
-        const approved = await new Promise<boolean>((resolve) => {
-          socket.emit('approval.requested', { session_id: sessionId, tool_call_id: tc.id, tool_name: name, tool_input: JSON.stringify(args) })
-          const handler = (data: { tool_call_id: string; choice: 'allow' | 'deny' }) => {
-            if (data.tool_call_id === tc.id) { socket.off('approval.respond', handler); resolve(data.choice === 'allow') }
+      // L2: strategy interception
+      const strategyState = getSessionState(sessionId)
+      const strategyResult = checkStrategy(name, strategyState.current_strategy)
+      console.log(`[strategy] tool=${name} current_strategy=${strategyState.current_strategy} result=${strategyResult}`)
+
+      if (strategyResult === 'deny') {
+        const msg = `[Plan] ${name} is not allowed in Plan mode`
+        messageStore.addMessage(sessionId, { role: 'tool', content: JSON.stringify({ error: msg }), tool_name: name, tool_input: JSON.stringify({ call_id: tc.id, args: argsStr }), tool_output: '', tool_status: 'error' })
+        messages.push({ role: 'tool', content: JSON.stringify({ error: msg }), tool_call_id: tc.id })
+        socket.emit('tool.completed', { session_id: sessionId, tool_call_id: tc.id, tool_name: name, tool_output: msg, duration_ms: 0 })
+        continue
+      }
+
+      if (strategyResult === 'ask') {
+        if (!isToolApprovedForSession(sessionId, name)) {
+          const choice = await new Promise<'once' | 'always' | 'reject'>((resolve) => {
+            socket.emit('approval.requested', { session_id: sessionId, tool_call_id: tc.id, tool_name: `[Ask] ${name}`, tool_input: JSON.stringify(args) })
+            const handler = (data: { tool_call_id: string; choice: 'once' | 'always' | 'reject' }) => {
+              if (data.tool_call_id === tc.id) { socket.off('approval.respond', handler); resolve(data.choice) }
+            }
+            socket.on('approval.respond', handler)
+            setTimeout(() => { socket.off('approval.respond', handler); resolve('reject') }, 60000)
+          })
+          if (choice === 'reject') {
+            messageStore.addMessage(sessionId, { role: 'tool', content: JSON.stringify({ error: `${name} denied` }), tool_name: name, tool_input: JSON.stringify({ call_id: tc.id, args: argsStr }), tool_output: '', tool_status: 'denied' })
+            messages.push({ role: 'tool', content: JSON.stringify({ error: `${name} denied` }), tool_call_id: tc.id })
+            socket.emit('tool.completed', { session_id: sessionId, tool_call_id: tc.id, tool_name: name, tool_output: 'Denied by user', duration_ms: 0 })
+            continue
           }
-          socket.on('approval.respond', handler)
-          setTimeout(() => { socket.off('approval.respond', handler); resolve(false) }, 60000)
-        })
-        if (!approved) {
-          messageStore.addMessage(sessionId, { role: 'tool', content: JSON.stringify({ error: `${name} denied` }), tool_name: name, tool_input: JSON.stringify({ call_id: tc.id, args: argsStr }), tool_output: '', tool_status: 'denied' })
-          messages.push({ role: 'tool', content: JSON.stringify({ error: `${name} denied` }), tool_call_id: tc.id })
-          socket.emit('tool.completed', { session_id: sessionId, tool_call_id: tc.id, tool_name: name, tool_output: 'Denied by user', duration_ms: 0 })
-          continue
+          if (choice === 'always') {
+            approveToolForSession(sessionId, name)
+          }
         }
       }
 

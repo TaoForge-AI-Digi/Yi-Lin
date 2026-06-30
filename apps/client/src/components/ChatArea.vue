@@ -2,6 +2,7 @@
 import MessageList from './MessageList.vue'
 import ChatInput from './ChatInput.vue'
 import ApprovalDialog from './ApprovalDialog.vue'
+import StrategyIndicator from './Chat/StrategyIndicator.vue'
 import { useChatStore } from '@/stores/chat'
 
 const chatStore = useChatStore()
@@ -9,13 +10,13 @@ const chatStore = useChatStore()
 
 <template>
   <main class="chat-area">
+    <StrategyIndicator />
     <MessageList />
     <ChatInput />
     <ApprovalDialog
       v-if="chatStore.pendingApproval"
       :approval="chatStore.pendingApproval"
-      @allow="chatStore.respondApproval('allow')"
-      @deny="chatStore.respondApproval('deny')"
+      @respond="(c: 'once' | 'always' | 'reject') => chatStore.respondApproval(c)"
     />
   </main>
 </template>

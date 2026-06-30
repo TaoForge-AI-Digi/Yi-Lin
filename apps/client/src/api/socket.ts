@@ -12,6 +12,8 @@ export function getSocket(): Socket {
 export function connectSocket() { const s = getSocket(); if (!s.connected) s.connect(); return s }
 export function disconnectSocket() { socket?.disconnect(); socket = null }
 
+export type Strategy = 'Plan' | 'Ask' | 'Bypass'
+
 export interface RunEvent {
   session_id: string
   delta?: string
@@ -22,4 +24,5 @@ export interface RunEvent {
   tool_output?: string
   error?: string
   usage?: { input_tokens: number; output_tokens: number }
+  strategy?: Strategy
 }

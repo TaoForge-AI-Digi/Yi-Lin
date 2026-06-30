@@ -4,24 +4,24 @@ import { characterMetaStore } from '../db/characterStore.js'
 
 const CHAR_DIR = resolve(import.meta.dirname, '../../data/characters')
 
-function readMdOrLegacy(agentId: string, section: string, legacyKey: string): string {
-  const f = resolve(CHAR_DIR, agentId, `${section}.md`)
+function readMdOrLegacy(characterId: string, section: string, legacyKey: string): string {
+  const f = resolve(CHAR_DIR, characterId, `${section}.md`)
   if (existsSync(f)) return readFileSync(f, 'utf-8')
-  const record = characterMetaStore.getById(agentId)
+  const record = characterMetaStore.getById(characterId)
   if (record) return (record as any)[legacyKey] || ''
   return ''
 }
 
 export const characterContentStore = {
-  get(agentId: string) {
+  get(characterId: string) {
     return {
-      soul: readMdOrLegacy(agentId, 'soul', 'soul'),
-      user: readMdOrLegacy(agentId, 'user', 'userProfile'),
-      memory: readMdOrLegacy(agentId, 'memory', 'memoryContent'),
+      soul: readMdOrLegacy(characterId, 'soul', 'soul'),
+      user: readMdOrLegacy(characterId, 'user', 'userProfile'),
+      memory: readMdOrLegacy(characterId, 'memory', 'memoryContent'),
     }
   },
-  save(agentId: string, data: { soul?: string; user?: string; memory?: string }) {
-    const dir = resolve(CHAR_DIR, agentId)
+  save(characterId: string, data: { soul?: string; user?: string; memory?: string }) {
+    const dir = resolve(CHAR_DIR, characterId)
     mkdirSync(dir, { recursive: true })
     if (data.soul !== undefined) writeFileSync(resolve(dir, 'soul.md'), data.soul, 'utf-8')
     if (data.user !== undefined) writeFileSync(resolve(dir, 'user.md'), data.user, 'utf-8')

@@ -2,10 +2,21 @@ import { Server, Socket } from 'socket.io'
 import { sessionStore } from '../db/sessionStore.js'
 import { messageStore } from '../db/messageStore.js'
 import { runAgent } from '../agent/loop.js'
+import { setSessionStrategy, removeSessionState, getSessionState } from '../agent/session.js'
+import type { Strategy } from '../agent/session.js'
 
 const activeRuns = new Map<string, { abort: () => void }>()
 
 export function registerChatSocket(io: Server, socket: Socket) {
+  socket.on('strategy.set', (data: { session_id: string; strategy: Strategy }, ack?: (resp: unknown) => void) => {
+    const { session_id, strategy } = data
+    if (!session_id) { ack?.({ error: 'No session_id' }); return }
+    if (!['Plan', 'Ask', 'Bypass'].includes(strategy)) { ack?.({ error: 'Invalid strategy' }); return }
+    setSessionStrategy(session_id, strategy, 'user')
+    console.log(`[strategy.set] session=${session_id} strategy=${strategy}`)
+    socket.emit('strategy.updated', { session_id, strategy })
+    ack?.({ status: 'ok' })
+  })
   socket.on('chat-run', async (data: Record<string, unknown>, ack?: (resp: unknown) => void) => {
     try {
       const sessionId = data.session_id as string

@@ -1,9 +1,9 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, rmSync } from 'fs'
 import { resolve } from 'path'
 
-const DATA_DIR = resolve(import.meta.dirname, '../../data')
-const FILE = resolve(DATA_DIR, 'characters.json')
-mkdirSync(DATA_DIR, { recursive: true })
+const CHAR_DIR = resolve(import.meta.dirname, '../../data/characters')
+
+mkdirSync(CHAR_DIR, { recursive: true })
 
 export interface CharacterPermission {
   edit: 'ask' | 'allow' | 'deny'
@@ -27,21 +27,50 @@ export interface CharacterRecord {
   memory?: CharacterMemory
   model?: string
   provider?: string
-  tools?: Record<string, boolean>
-  permissions?: CharacterPermission
+  tools?: string[]                   // 工具白名单
+  permissions?: CharacterPermission  // 遗留
   maxSteps?: number
-  mode?: 'primary' | 'subagent' | 'all'
+  role?: 'main' | 'sub' | 'both'
+  groups?: string[]
+  default_strategy?: 'Plan' | 'Ask' | 'Bypass'
+  skills?: string[]
   enabled?: boolean
   builtIn?: boolean
   createdAt?: number
   updatedAt?: number
 }
 
-function readAll(): CharacterRecord[] {
-  if (!existsSync(FILE)) return []
-  try { return JSON.parse(readFileSync(FILE, 'utf-8')) } catch { return [] }
+function pathFor(id: string): string {
+  return resolve(CHAR_DIR, id, 'character.json')
 }
-function writeAll(items: CharacterRecord[]) { writeFileSync(FILE, JSON.stringify(items, null, 2), 'utf-8') }
+
+function readAll(): CharacterRecord[] {
+  if (!existsSync(CHAR_DIR)) return []
+  const items: CharacterRecord[] = []
+  try {
+    const entries = readdirSync(CHAR_DIR, { withFileTypes: true })
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      const f = pathFor(entry.name)
+      if (!existsSync(f)) continue
+      try { items.push(JSON.parse(readFileSync(f, 'utf-8'))) } catch { /* skip corrupt */ }
+    }
+  } catch { /* dir not found */ }
+  return items
+}
+
+function writeSingle(record: CharacterRecord) {
+  const dir = resolve(CHAR_DIR, record.id)
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(resolve(dir, 'character.json'), JSON.stringify(record, null, 2), 'utf-8')
+}
+
+function removeDir(id: string) {
+  const dir = resolve(CHAR_DIR, id)
+  if (existsSync(dir)) {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
 
 function nextId(items: CharacterRecord[]): string {
   const max = items.reduce((m, c) => Math.max(m, parseInt(c.id) || 0), 0)
@@ -50,11 +79,13 @@ function nextId(items: CharacterRecord[]): string {
 
 const NOW = Date.now()
 
+const ALL_TOOLS = ['read', 'write', 'edit', 'grep', 'glob', 'bash', 'webfetch', 'websearch']
+
 const BUILTIN: CharacterRecord[] = [
-  { id: 'general', name: 'General', description: '通用助手', color: '#6366f1', permissions: { edit: 'ask', bash: 'deny', webfetch: 'allow' }, mode: 'all', maxSteps: 10, enabled: true, builtIn: true, createdAt: NOW, updatedAt: NOW },
-  { id: 'coder', name: 'Coder', description: '编程专家', color: '#10b981', permissions: { edit: 'ask', bash: 'ask', webfetch: 'allow' }, mode: 'primary', maxSteps: 20, enabled: true, builtIn: true, createdAt: NOW, updatedAt: NOW },
-  { id: 'reviewer', name: 'Reviewer', description: '代码审查', color: '#f59e0b', permissions: { edit: 'ask', bash: 'deny', webfetch: 'deny' }, mode: 'subagent', maxSteps: 15, enabled: true, builtIn: true, createdAt: NOW, updatedAt: NOW },
-  { id: 'explorer', name: 'Explorer', description: '代码探索', color: '#8b5cf6', permissions: { edit: 'allow', bash: 'deny', webfetch: 'allow' }, mode: 'all', maxSteps: 10, enabled: true, builtIn: true, createdAt: NOW, updatedAt: NOW },
+  { id: 'general', name: 'General', description: '通用助手', color: '#6366f1', tools: ['read', 'write', 'edit', 'grep', 'glob', 'webfetch', 'websearch'], role: 'both', maxSteps: 10, enabled: true, builtIn: true, createdAt: NOW, updatedAt: NOW },
+  { id: 'coder', name: 'Coder', description: '编程专家', color: '#10b981', tools: ALL_TOOLS, role: 'main', maxSteps: 20, enabled: true, builtIn: true, createdAt: NOW, updatedAt: NOW },
+  { id: 'reviewer', name: 'Reviewer', description: '代码审查', color: '#f59e0b', tools: ['read', 'grep', 'glob'], role: 'sub', maxSteps: 15, enabled: true, builtIn: true, createdAt: NOW, updatedAt: NOW },
+  { id: 'explorer', name: 'Explorer', description: '代码探索', color: '#8b5cf6', tools: ['read', 'write', 'edit', 'grep', 'glob', 'webfetch', 'websearch'], role: 'both', maxSteps: 10, enabled: true, builtIn: true, createdAt: NOW, updatedAt: NOW },
 ]
 
 export function seedBuiltinCharacters() {
@@ -62,37 +93,54 @@ export function seedBuiltinCharacters() {
   const existing = new Set(all.map(a => a.id))
   let changed = false
   for (const c of BUILTIN) {
-    if (!existing.has(c.id)) { all.push(c); changed = true }
+    if (!existing.has(c.id)) { writeSingle(c); changed = true }
   }
-  if (changed) writeAll(all)
+  // patch existing builtins that may be missing new fields
+  for (const c of BUILTIN) {
+    const existingRecord = all.find(a => a.id === c.id)
+    if (existingRecord) {
+      let dirty = false
+      if (!existingRecord.tools) { existingRecord.tools = c.tools; dirty = true }
+      if (!existingRecord.role) { existingRecord.role = c.role; dirty = true }
+      if (!existingRecord.default_strategy && c.default_strategy) { existingRecord.default_strategy = c.default_strategy; dirty = true }
+      if (!existingRecord.groups) { existingRecord.groups = c.groups; dirty = true }
+      if (!existingRecord.skills) { existingRecord.skills = c.skills; dirty = true }
+      if (dirty) { writeSingle(existingRecord as CharacterRecord); changed = true }
+    }
+  }
+  if (changed) console.log('[seed] Builtin characters updated')
 }
 
 export const characterMetaStore = {
   getAll: () => readAll(),
-  getById: (id: string) => readAll().find(a => a.id === id) || null,
+
+  getById: (id: string) => {
+    const f = pathFor(id)
+    if (!existsSync(f)) return null
+    try { return JSON.parse(readFileSync(f, 'utf-8')) as CharacterRecord } catch { return null }
+  },
+
   create: (data: Omit<CharacterRecord, 'id' | 'createdAt' | 'updatedAt'>) => {
     const all = readAll()
     const now = Date.now()
     const record: CharacterRecord = { ...data, id: nextId(all), createdAt: now, updatedAt: now }
-    all.push(record)
-    writeAll(all)
+    writeSingle(record)
     return record
   },
+
   update: (id: string, data: Partial<CharacterRecord>) => {
-    const all = readAll()
-    const idx = all.findIndex(a => a.id === id)
-    if (idx === -1) return null
-    all[idx] = { ...all[idx], ...data, id, updatedAt: Date.now() }
-    writeAll(all)
-    return all[idx]
+    const record = characterMetaStore.getById(id)
+    if (!record) return null
+    const updated: CharacterRecord = { ...record, ...data, id, updatedAt: Date.now() }
+    writeSingle(updated)
+    return updated
   },
+
   delete: (id: string) => {
-    const all = readAll()
-    const idx = all.findIndex(a => a.id === id)
-    if (idx === -1) return false
-    if (all[idx].builtIn) return false
-    all.splice(idx, 1)
-    writeAll(all)
+    const record = characterMetaStore.getById(id)
+    if (!record) return false
+    if (record.builtIn) return false
+    removeDir(id)
     return true
   },
 }

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useChatStore } from '@/stores/chat'
+import type { Strategy } from '@/api/socket'
 import InputToolbar from './Chat/InputToolbar.vue'
 
 const chatStore = useChatStore()
@@ -8,9 +9,32 @@ const text = ref('')
 const sending = ref(false)
 const textareaRef = ref<HTMLTextAreaElement>()
 
-async function handleSend() {
+const commandStrategies: Record<string, Strategy> = {
+  '/plan': 'Plan', '/ask': 'Ask', '/bypass': 'Bypass',
+}
+
+async function handleSubmit() {
   const input = text.value.trim()
-  if (!input || sending.value) return
+
+  // No content + streaming → abort
+  if (!input && chatStore.isStreaming) {
+    chatStore.abortRun()
+    return
+  }
+  // No content + idle → disabled (button does nothing)
+  if (!input) return
+
+  // Command → strategy.set
+  const cmd = input.toLowerCase()
+  if (cmd in commandStrategies) {
+    chatStore.setStrategy(commandStrategies[cmd])
+    text.value = ''
+    resetHeight()
+    return
+  }
+
+  // Normal message
+  if (sending.value) return
   sending.value = true
   text.value = ''
   resetHeight()
@@ -19,7 +43,7 @@ async function handleSend() {
 }
 
 function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit() }
 }
 
 let dragStartY = 0
@@ -81,8 +105,12 @@ function resetHeight() {
         <div class="resize-handle" @mousedown="onResizeStart">⋮</div>
       </div>
       <div class="actions">
-        <button v-if="chatStore.isStreaming" class="btn abort" @click="chatStore.abortRun()">■ Stop</button>
-        <button v-else class="btn send" @click="handleSend" :disabled="!text.trim() || sending">发送</button>
+        <button
+          class="btn"
+          :class="chatStore.isStreaming ? 'abort' : 'send'"
+          :disabled="!chatStore.isStreaming && !text.trim()"
+          @click="handleSubmit"
+        >{{ chatStore.isStreaming ? '■ Stop' : '发送' }}</button>
       </div>
     </div>
     <div class="input-hint">Enter 发送 · Shift+Enter 换行</div>

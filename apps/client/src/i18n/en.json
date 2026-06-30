@@ -124,6 +124,12 @@
     "selfEvolution": "Self Evolution",
     "charLimit": "Char Limit",
     "memoryContent": "Memory Content",
+    "roleField": "Role",
+    "roleMain": "Main",
+    "roleSub": "Sub",
+    "roleBoth": "Both",
+    "defaultStrategy": "Default Strategy",
+    "groups": "Groups",
     "skillsPlaceholder": "Skills configuration coming soon...",
     "knowledgePlaceholder": "Knowledge base configuration coming soon..."
   },

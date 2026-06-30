@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
-import { connectSocket, getSocket, type RunEvent } from '@/api/socket'
+import { connectSocket, getSocket, type RunEvent, type Strategy } from '@/api/socket'
 import * as sessionsApi from '@/api/sessions'
 
 const PERSIST_KEY = 'yi-lin-chat-defaults'
@@ -36,6 +36,7 @@ export interface Session {
   model?: string; provider_id?: string; workspace?: string; pinned?: boolean
   thinking?: boolean
   reasoning_effort?: string
+  current_strategy?: Strategy
   created_at: number; updated_at: number
 }
 
@@ -51,6 +52,7 @@ export const useChatStore = defineStore('chat', () => {
   const activeSession = computed(() => sessions.value.find(s => s.id === activeSessionId.value) || null)
   const isStreaming = ref(false)
   const pendingApproval = ref<{ tool_call_id: string; tool_name: string; description: string } | null>(null)
+  const currentStrategy = computed(() => activeSession.value?.current_strategy || 'Plan')
   const collapsedWorkspaces = ref<Set<string>>(new Set())
   const isBatchMode = ref(false)
   const selectedSessionIds = ref<Set<string>>(new Set())
@@ -117,6 +119,16 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  // persistent socket listeners (registered once)
+  {
+    const socket = getSocket()
+    socket.off('strategy.updated')
+    socket.on('strategy.updated', (data: RunEvent) => {
+      const s = sessions.value.find(x => x.id === data.session_id)
+      if (s && data.strategy) s.current_strategy = data.strategy
+    })
+  }
+
   async function loadSessions() {
     const list = await sessionsApi.fetchSessions()
     sessions.value = list.map(s => ({ ...s, model: s.model ?? undefined, provider_id: s.provider_id ?? undefined, workspace: s.workspace ?? undefined, messages: [] }))
@@ -165,6 +177,15 @@ export const useChatStore = defineStore('chat', () => {
     } catch { /* new session */ }
   }
 
+  function setStrategy(strategy: Strategy) {
+    const session = activeSession.value
+    if (!session) return
+    const socket = connectSocket()
+    socket.emit('strategy.set', { session_id: session.id, strategy }, (resp: any) => {
+      if (resp?.error) console.warn('strategy.set error:', resp.error)
+    })
+  }
+
   async function sendMessage(input: string) {
     let session = activeSession.value
     if (!session) {
@@ -201,6 +222,10 @@ export const useChatStore = defineStore('chat', () => {
       reasoning_effort: session.reasoning_effort || undefined,
     })
 
+    const onStrategyUpdated = (data: RunEvent) => {
+      if (data.session_id !== session!.id) return
+      if (data.strategy) session!.current_strategy = data.strategy
+    }
     const onDelta = (data: RunEvent) => {
       if (data.session_id !== session!.id) return
       const last = session!.messages[session!.messages.length - 1]
@@ -250,6 +275,7 @@ export const useChatStore = defineStore('chat', () => {
     }
 
     function cleanup() {
+      socket.off('strategy.updated', onStrategyUpdated)
       socket.off('message.delta', onDelta)
       socket.off('tool.started', onToolStarted)
       socket.off('tool.completed', onToolCompleted)
@@ -258,6 +284,7 @@ export const useChatStore = defineStore('chat', () => {
       socket.off('run.failed', onFailed)
     }
 
+    socket.on('strategy.updated', onStrategyUpdated)
     socket.on('message.delta', onDelta)
     socket.on('tool.started', onToolStarted)
     socket.on('tool.completed', onToolCompleted)
@@ -266,7 +293,7 @@ export const useChatStore = defineStore('chat', () => {
     socket.on('run.failed', onFailed)
   }
 
-  function respondApproval(choice: 'allow' | 'deny') {
+  function respondApproval(choice: 'once' | 'always' | 'reject') {
     if (!pendingApproval.value) return
     const socket = getSocket()
     if (socket?.connected && activeSessionId.value) {
@@ -341,10 +368,10 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   return {
-    sessions, activeSessionId, activeSession, isStreaming, pendingApproval,
+    sessions, activeSessionId, activeSession, isStreaming, pendingApproval, currentStrategy,
     collapsedWorkspaces, workspaceGroups, isBatchMode, selectedSessionIds,
     attachments, addAttachment, removeAttachment, clearAttachments,
-    loadSessions, createSession, switchSession, sendMessage, respondApproval, abortRun,
+    loadSessions, createSession, switchSession, sendMessage, setStrategy, respondApproval, abortRun,
     renameSession, deleteSingleSession, resetToMessage,
     toggleSessionStar,
     toggleWorkspaceCollapse, toggleBatchMode, toggleSessionSelection, selectAllSessions, batchDeleteSessions,

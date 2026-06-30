@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useChatStore } from '@/stores/chat'
 import ModelSelector from './ModelSelector.vue'
 import CharacterSelector from './CharacterSelector.vue'
+import StrategyToggle from './StrategyToggle.vue'
 
 const { t } = useI18n()
 const chatStore = useChatStore()
@@ -51,6 +52,7 @@ function onFilePicked(e: Event) {
     <div class="toolbar-left">
       <CharacterSelector />
       <ModelSelector />
+      <StrategyToggle />
       <label class="toolbar-item workspace">
         <span class="label">{{ t('chat.workspace') }}</span>
         <input type="text" :value="session.workspace || ''" @change="onWorkspaceChange" :placeholder="`/${t('chat.workspace').toLowerCase()}/project`" />

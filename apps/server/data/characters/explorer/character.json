@@ -1,0 +1,35 @@
+{
+  "id": "explorer",
+  "name": "Explorer",
+  "description": "代码探索",
+  "color": "#8b5cf6",
+  "permissions": {
+    "files": "allow",
+    "bash": "deny"
+  },
+  "role": "both",
+  "groups": [
+    "default"
+  ],
+  "default_strategy": "Ask",
+  "skills": [],
+  "builtIn": true,
+  "avatar": "",
+  "memory": {
+    "enabled": false,
+    "selfEvolution": false,
+    "charLimit": 2200
+  },
+  "maxSteps": 10,
+  "enabled": true,
+  "updatedAt": 1782805328796,
+  "tools": [
+    "read",
+    "write",
+    "edit",
+    "grep",
+    "glob",
+    "webfetch",
+    "websearch"
+  ]
+}

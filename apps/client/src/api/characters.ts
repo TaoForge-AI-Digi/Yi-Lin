@@ -25,10 +25,13 @@ export interface Character {
   memoryContent?: string
   model?: string
   provider?: string
-  tools?: Record<string, boolean>
+  tools?: string[]
   permissions?: CharacterPermission
   maxSteps?: number
-  mode?: 'primary' | 'subagent' | 'all'
+  role?: 'main' | 'sub' | 'both'
+  groups?: string[]
+  default_strategy?: 'Plan' | 'Ask' | 'Bypass'
+  skills?: string[]
   enabled?: boolean
   builtIn?: boolean
   createdAt?: number

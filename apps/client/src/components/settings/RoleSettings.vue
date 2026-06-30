@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCharactersStore } from '@/stores/characters'
-import type { CharacterConfig } from '@/api/characters'
+import { fetchSkills } from '@/api/skills'
+import type { CharacterConfig, Character } from '@/api/characters'
 
 const { t } = useI18n()
 const store = useCharactersStore()
@@ -10,13 +11,18 @@ const store = useCharactersStore()
 const searchQuery = ref('')
 const selectedId = ref<string | null>(null)
 const showForm = ref(false)
+const groupView = ref(false)
 const activeTab = ref<'basic' | 'memory' | 'tools' | 'skills' | 'knowledge'>('basic')
 
 const editingSection = ref<'soul' | 'user' | 'memory' | null>(null)
 const editContent = ref('')
 const isNew = ref(false)
 
-const defaultPermissions = { edit: 'ask' as const, bash: 'ask' as const, webfetch: 'allow' as const }
+const allSkills = ref<{ name: string; description: string }[]>([])
+const newGroupName = ref('')
+const showNewGroupInput = ref(false)
+
+const ALL_TOOLS = ['read', 'write', 'edit', 'bash', 'grep', 'glob', 'webfetch', 'websearch']
 
 const form = ref<CharacterConfig>({
   name: '',
@@ -27,10 +33,29 @@ const form = ref<CharacterConfig>({
   userProfile: '',
   memory: { enabled: false, selfEvolution: false, charLimit: 2200 },
   memoryContent: '',
-  permissions: { ...defaultPermissions },
+  tools: [],
   maxSteps: 10,
-  mode: 'all',
+  role: 'both',
+  groups: [],
+  default_strategy: 'Ask',
+  skills: [],
   enabled: true,
+})
+
+function toggleTool(name: string) {
+  const list = form.value.tools || []
+  const idx = list.indexOf(name)
+  if (idx >= 0) list.splice(idx, 1)
+  else list.push(name)
+}
+
+const displayGroups = computed(() => {
+  const g = new Set<string>()
+  for (const c of store.characters) {
+    if (c.groups) c.groups.forEach((gr: string) => g.add(gr))
+  }
+  if (form.value.groups) form.value.groups.forEach(gr => g.add(gr))
+  return [...g].sort()
 })
 
 const filteredCharacters = computed(() => {
@@ -40,10 +65,53 @@ const filteredCharacters = computed(() => {
   )
 })
 
+const groupedCharacters = computed(() => {
+  const groups = new Map<string, typeof store.characters>()
+  const uncategorized: typeof store.characters = []
+  for (const c of filteredCharacters.value) {
+    if (!c.groups || c.groups.length === 0) { uncategorized.push(c); continue }
+    for (const grp of c.groups) {
+      if (!groups.has(grp)) groups.set(grp, [])
+      groups.get(grp)!.push(c)
+    }
+  }
+  const result: { name: string; characters: typeof store.characters }[] = []
+  for (const [name, chars] of groups) {
+    result.push({ name, characters: chars })
+  }
+  result.sort((a, b) => a.name.localeCompare(b.name))
+  if (uncategorized.length > 0) result.push({ name: 'Uncategorized', characters: uncategorized })
+  return result
+})
+
 function getFormValue(key: 'soul' | 'user' | 'memory'): string {
   if (key === 'soul') return form.value.soul || ''
   if (key === 'user') return form.value.userProfile || ''
   return form.value.memoryContent || ''
+}
+
+function toggleGroup(grp: string) {
+  const g = form.value.groups || []
+  const idx = g.indexOf(grp)
+  if (idx >= 0) g.splice(idx, 1)
+  else g.push(grp)
+}
+
+function addNewGroup() {
+  const name = newGroupName.value.trim()
+  if (name && !(form.value.groups || []).includes(name)) {
+    const g = form.value.groups || []
+    g.push(name)
+  }
+  newGroupName.value = ''
+  showNewGroupInput.value = false
+}
+
+function toggleSkill(name: string) {
+  const s = form.value.skills || []
+  const idx = s.indexOf(name)
+  if (idx >= 0) s.splice(idx, 1)
+  else s.push(name)
 }
 
 function select(id: string) {
@@ -62,9 +130,12 @@ function select(id: string) {
       userProfile: c.userProfile || '',
       memory: c.memory ? { ...c.memory, charLimit: c.memory.charLimit ?? 2200, selfEvolution: c.memory.selfEvolution ?? false } : { enabled: false, selfEvolution: false, charLimit: 2200 },
       memoryContent: c.memoryContent || '',
-      permissions: c.permissions ? { ...c.permissions } : { ...defaultPermissions },
+      tools: c.tools ? [...c.tools] : [],
       maxSteps: c.maxSteps ?? 10,
-      mode: c.mode || 'all',
+      role: c.role || 'both',
+      groups: c.groups ? [...c.groups] : [],
+      default_strategy: c.default_strategy || 'Ask',
+      skills: c.skills ? [...c.skills] : [],
       enabled: c.enabled ?? true,
     }
   }
@@ -84,12 +155,22 @@ function startCreate() {
     userProfile: '',
     memory: { enabled: false, selfEvolution: false, charLimit: 2200 },
     memoryContent: '',
-    permissions: { ...defaultPermissions },
+    tools: [],
     maxSteps: 10,
-    mode: 'all',
+    role: 'both',
+    groups: [],
+    default_strategy: 'Ask',
+    skills: [],
     enabled: true,
   }
 }
+
+onMounted(async () => {
+  try {
+    const res = await fetchSkills()
+    allSkills.value = res.skills.map(s => ({ name: s.name, description: s.description }))
+  } catch { /* skills unavailable */ }
+})
 
 async function handleDelete(id: string) {
   await store.remove(id)
@@ -147,10 +228,6 @@ function saveEdit() {
   editContent.value = ''
 }
 
-function setPermission(key: string, value: string) {
-  if (!form.value.permissions) form.value.permissions = { ...defaultPermissions }
-  ;(form.value.permissions as any)[key] = value
-}
 
 
 </script>
@@ -163,38 +240,75 @@ function setPermission(key: string, value: string) {
         <div class="role-list-header">
           <span class="role-list-title">{{ t('role.characterList') }}</span>
           <span class="role-count">{{ store.characters.length }}</span>
+          <button class="group-toggle" :class="{ active: groupView }" @click="groupView = !groupView" :title="groupView ? 'Flat view' : 'Group view'">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          </button>
         </div>
         <div class="role-search">
           <input v-model="searchQuery" class="search-input" :placeholder="t('role.searchPlaceholder')" />
         </div>
         <div class="role-items">
-          <button
-            v-for="c in filteredCharacters"
-            :key="c.id"
-            :class="['role-item', { active: selectedId === c.id }]"
-            @click="select(c.id)"
-          >
-            <span class="role-avatar" :style="{ borderColor: c.color || '#999' }">
-              <img v-if="c.avatar" :src="c.avatar" class="role-avatar-img" />
-              <span v-else class="role-avatar-letter">{{ c.name.charAt(0).toUpperCase() }}</span>
-            </span>
-            <span class="role-info">
-              <span class="role-name">{{ c.name }}</span>
-              <span class="role-desc">{{ c.description || '' }}</span>
-            </span>
-            <span v-if="c.builtIn" class="role-badge">{{ t('role.builtIn') }}</span>
-            <span v-else class="role-actions">
-              <span class="role-action-btn edit-btn" @click.stop="select(c.id)" :title="t('common.edit')">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          <template v-if="groupView">
+            <div v-for="grp in groupedCharacters" :key="grp.name" class="role-group-section">
+              <div class="role-group-header">{{ grp.name }} <span class="role-group-count">{{ grp.characters.length }}</span></div>
+              <button
+                v-for="c in grp.characters"
+                :key="c.id"
+                :class="['role-item', { active: selectedId === c.id }]"
+                @click="select(c.id)"
+              >
+                <span class="role-avatar" :style="{ borderColor: c.color || '#999' }">
+                  <img v-if="c.avatar" :src="c.avatar" class="role-avatar-img" />
+                  <span v-else class="role-avatar-letter">{{ c.name.charAt(0).toUpperCase() }}</span>
+                </span>
+                <span class="role-info">
+                  <span class="role-name">{{ c.name }}</span>
+                  <span class="role-desc">{{ c.description || '' }}</span>
+                </span>
+                <span v-if="c.builtIn" class="role-badge">{{ t('role.builtIn') }}</span>
+                <span v-else class="role-actions">
+                  <span class="role-action-btn edit-btn" @click.stop="select(c.id)" :title="t('common.edit')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  </span>
+                  <span class="role-action-btn delete-btn" @click.stop="handleDelete(c.id)" :title="t('common.delete')">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                  </span>
+                </span>
+              </button>
+            </div>
+            <div v-if="groupedCharacters.length === 0" class="role-empty">
+              {{ t('role.noCharacters') }}
+            </div>
+          </template>
+          <template v-else>
+            <button
+              v-for="c in filteredCharacters"
+              :key="c.id"
+              :class="['role-item', { active: selectedId === c.id }]"
+              @click="select(c.id)"
+            >
+              <span class="role-avatar" :style="{ borderColor: c.color || '#999' }">
+                <img v-if="c.avatar" :src="c.avatar" class="role-avatar-img" />
+                <span v-else class="role-avatar-letter">{{ c.name.charAt(0).toUpperCase() }}</span>
               </span>
-              <span class="role-action-btn delete-btn" @click.stop="handleDelete(c.id)" :title="t('common.delete')">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              <span class="role-info">
+                <span class="role-name">{{ c.name }}</span>
+                <span class="role-desc">{{ c.description || '' }}</span>
               </span>
-            </span>
-          </button>
-          <div v-if="filteredCharacters.length === 0" class="role-empty">
-            {{ t('role.noCharacters') }}
-          </div>
+              <span v-if="c.builtIn" class="role-badge">{{ t('role.builtIn') }}</span>
+              <span v-else class="role-actions">
+                <span class="role-action-btn edit-btn" @click.stop="select(c.id)" :title="t('common.edit')">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                </span>
+                <span class="role-action-btn delete-btn" @click.stop="handleDelete(c.id)" :title="t('common.delete')">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                </span>
+              </span>
+            </button>
+            <div v-if="filteredCharacters.length === 0" class="role-empty">
+              {{ t('role.noCharacters') }}
+            </div>
+          </template>
         </div>
         <div class="role-list-footer">
           <button class="create-btn" @click="startCreate">+ {{ t('role.create') }}</button>
@@ -255,6 +369,32 @@ function setPermission(key: string, value: string) {
                   <input type="checkbox" v-model="form.memory!.selfEvolution!" class="toggle-input" />
                   <span class="toggle-switch"></span>
                 </label>
+                <div class="field">
+                  <label class="field-label">Role</label>
+                  <select v-model="form.role" class="field-input">
+                    <option value="main">Main</option>
+                    <option value="sub">Sub</option>
+                    <option value="both">Both</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label class="field-label">Default Strategy</label>
+                  <select v-model="form.default_strategy" class="field-input">
+                    <option value="Plan">Plan</option>
+                    <option value="Ask">Ask</option>
+                    <option value="Bypass">Bypass</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label class="field-label">Groups</label>
+                  <div class="group-chips">
+                    <span v-for="grp in displayGroups" :key="grp" :class="['group-chip', { active: form.groups?.includes(grp) }]" @click="toggleGroup(grp)">{{ grp }}</span>
+                    <span v-if="showNewGroupInput" class="group-input-wrap">
+                      <input v-model="newGroupName" class="group-input" placeholder="New group" @keyup.enter="addNewGroup" @blur="addNewGroup" />
+                    </span>
+                    <span v-else class="group-add-btn" @click="showNewGroupInput = true">+</span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -330,39 +470,20 @@ function setPermission(key: string, value: string) {
 
           <!-- Tools Tab -->
           <div v-if="activeTab === 'tools'" class="tab-content">
-            <div class="permissions-section">
-              <div class="perm-grid">
-                <div class="perm-row">
-                  <span class="perm-key">Edit</span>
-                  <div class="perm-radio-group">
-                    <label v-for="p in ['ask', 'allow', 'deny']" :key="p" :class="['perm-radio', { active: form.permissions?.edit === p }]">
-                      <input type="radio" name="perm-edit" :value="p" :checked="form.permissions?.edit === p" @change="setPermission('edit', p)" />
-                      <span>{{ p.charAt(0).toUpperCase() + p.slice(1) }}</span>
-                    </label>
-                  </div>
-                  <span class="perm-desc">read / write / edit / grep / glob</span>
-                </div>
-                <div class="perm-row">
-                  <span class="perm-key">Bash</span>
-                  <div class="perm-radio-group">
-                    <label v-for="p in ['ask', 'allow', 'deny']" :key="p" :class="['perm-radio', { active: form.permissions?.bash === p }]">
-                      <input type="radio" name="perm-bash" :value="p" :checked="form.permissions?.bash === p" @change="setPermission('bash', p)" />
-                      <span>{{ p.charAt(0).toUpperCase() + p.slice(1) }}</span>
-                    </label>
-                  </div>
-                  <span class="perm-desc">bash / sh</span>
-                </div>
-                <div class="perm-row">
-                  <span class="perm-key">Webfetch</span>
-                  <div class="perm-radio-group">
-                    <label v-for="p in ['allow', 'deny']" :key="p" :class="['perm-radio', { active: form.permissions?.webfetch === p }]">
-                      <input type="radio" name="perm-webfetch" :value="p" :checked="form.permissions?.webfetch === p" @change="setPermission('webfetch', p)" />
-                      <span>{{ p.charAt(0).toUpperCase() + p.slice(1) }}</span>
-                    </label>
-                  </div>
-                  <span class="perm-desc">webfetch / websearch</span>
+            <div class="tools-section">
+              <div class="section-header">
+                <div class="section-title-row">
+                  <span class="section-title">工具白名单</span>
                 </div>
               </div>
+              <div class="tools-grid">
+                <label v-for="tool in ALL_TOOLS" :key="tool" class="tool-toggle-row">
+                  <span class="tool-name">{{ tool }}</span>
+                  <input type="checkbox" :checked="(form.tools || []).includes(tool)" @change="toggleTool(tool)" class="toggle-input" />
+                  <span class="toggle-switch"></span>
+                </label>
+              </div>
+              <p class="tools-hint">开启的工具角色才能调用。空 = 任何工具都不能用。</p>
             </div>
           </div>
 
@@ -431,8 +552,18 @@ function setPermission(key: string, value: string) {
 
           <!-- Skills Tab -->
           <div v-if="activeTab === 'skills'" class="tab-content">
-            <div class="placeholder-tab">
-              <p>{{ t('role.skillsPlaceholder') }}</p>
+            <div class="skills-section">
+              <p class="section-subtitle">Available Skills</p>
+              <div v-if="allSkills.length === 0" class="placeholder-tab">
+                <p>No skills available. Create skills in the Skills settings tab.</p>
+              </div>
+              <div v-else class="skills-grid">
+                <label v-for="sk in allSkills" :key="sk.name" :class="['skill-check', { active: form.skills?.includes(sk.name) }]">
+                  <input type="checkbox" :checked="form.skills?.includes(sk.name)" @change="toggleSkill(sk.name)" />
+                  <span class="skill-name">{{ sk.name }}</span>
+                  <span class="skill-desc">{{ sk.description }}</span>
+                </label>
+              </div>
             </div>
           </div>
 
@@ -483,16 +614,56 @@ function setPermission(key: string, value: string) {
 .role-list-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 6px;
   padding: 12px 14px;
   border-bottom: 1px solid #e0e0e0;
   background: #fff;
 }
 
-.role-list-title {
-  font-size: 14px;
+.role-list-title { font-size: 14px; font-weight: 600; color: #333; flex: 1; }
+
+.group-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  color: #888;
+  padding: 0;
+  flex-shrink: 0;
+}
+.group-toggle:hover { border-color: #1976d2; color: #1976d2; }
+.group-toggle.active { background: #e3f2fd; border-color: #1976d2; color: #1976d2; }
+
+.role-group-section { border-bottom: 1px solid #f0f0f0; }
+.role-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 11px;
   font-weight: 600;
-  color: #333;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: #f8f8f8;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.role-group-count {
+  font-size: 10px;
+  color: #fff;
+  background: #bbb;
+  border-radius: 8px;
+  padding: 0 6px;
+  min-width: 16px;
+  text-align: center;
+  line-height: 16px;
 }
 
 .role-count {
@@ -890,6 +1061,39 @@ function setPermission(key: string, value: string) {
   font-family: 'SF Mono', 'Consolas', monospace;
 }
 
+/* ── Tools Tab ── */
+.tools-section {
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.tools-grid {
+  padding: 8px 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+.tool-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.tool-toggle-row:hover { background: #f5f5f5; }
+.tool-name {
+  font-size: 13px;
+  font-family: 'SF Mono', 'Consolas', monospace;
+  color: #555;
+}
+.tools-hint {
+  padding: 6px 12px 8px;
+  font-size: 11px;
+  color: #aaa;
+  margin: 0;
+}
+
 /* ── Memory Tab ── */
 .memory-section {
   border: 1px solid #e0e0e0;
@@ -983,6 +1187,71 @@ function setPermission(key: string, value: string) {
   gap: 6px;
   margin-top: 8px;
 }
+
+/* ── Group Chips ── */
+.group-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.group-chip {
+  display: inline-flex;
+  padding: 2px 10px;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  font-size: 12px;
+  color: #666;
+  background: #fff;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.group-chip:hover { border-color: #1976d2; color: #1976d2; }
+.group-chip.active { background: #e3f2fd; border-color: #1976d2; color: #1976d2; }
+.group-input-wrap { display: inline-flex; }
+.group-input {
+  width: 80px;
+  padding: 2px 6px;
+  font-size: 12px;
+  border: 1px solid #1976d2;
+  border-radius: 4px;
+  outline: none;
+}
+.group-add-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px dashed #bbb;
+  border-radius: 50%;
+  font-size: 14px;
+  color: #999;
+  cursor: pointer;
+}
+.group-add-btn:hover { border-color: #1976d2; color: #1976d2; }
+
+/* ── Skills Grid ── */
+.skills-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.skill-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.skill-check:hover { border-color: #1976d2; background: #f8fbff; }
+.skill-check.active { border-color: #1976d2; background: #e3f2fd; }
+.skill-check input { display: none; }
+.skill-name { font-size: 13px; font-weight: 600; color: #333; min-width: 80px; }
+.skill-desc { font-size: 12px; color: #888; }
 
 /* ── Placeholder tabs ── */
 .placeholder-tab {

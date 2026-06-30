@@ -56,7 +56,7 @@ export async function executeTool(name: string, args: Record<string, string>, wo
         const content = readFileSync(fullPath, 'utf-8')
         const oldString = args.oldString || ''
         const newString = args.newString || ''
-        const replaceAll = args.replaceAll === 'true' || args.replaceAll === true
+        const replaceAll = args.replaceAll === 'true'
         if (!oldString) return { output: '', error: 'oldString is required' }
         if (replaceAll) {
           if (findFirstOccurrence(content, oldString) === -1) return { output: '', error: 'oldString not found in file' }

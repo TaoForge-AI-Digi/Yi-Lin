@@ -1,0 +1,28 @@
+{
+  "name": "chatter",
+  "description": "只能聊天的废物角色",
+  "avatar": "",
+  "color": "#6366f1",
+  "memory": {
+    "enabled": false,
+    "selfEvolution": false,
+    "charLimit": 2200
+  },
+  "permissions": {
+    "edit": "ask",
+    "bash": "ask",
+    "webfetch": "allow"
+  },
+  "maxSteps": 10,
+  "role": "both",
+  "groups": [
+    "test"
+  ],
+  "default_strategy": "Ask",
+  "skills": [],
+  "enabled": true,
+  "id": "2",
+  "createdAt": 1782810790654,
+  "updatedAt": 1782811287733,
+  "tools": []
+}
